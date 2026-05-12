@@ -1,0 +1,32 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: /absolute/path/to/model_inputs_engineered/gdd_rel_heading
+
+experiment:
+  targets:
+    - ActualYD
+    - CM
+    - LM
+    - PHM
+    - Spike
+    - TKW
+  genotype_representation: grm_pca
+  random_seed: 42
+
+optuna:
+  n_trials: 3
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: false
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: false
+
+output:
+  output_dir: /absolute/path/to/output/result_3_1b

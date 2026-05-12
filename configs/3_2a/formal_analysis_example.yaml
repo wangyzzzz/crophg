@@ -1,0 +1,12 @@
+section: 3.2A
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_3_2a_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - single_anchor_delta.csv
+  - best_anchor_by_trait_scenario.csv
+  - factor_group_importance.csv
+report_focus:
+  - effective windows across scenarios
+  - anchor consistency
+  - factor-group importance

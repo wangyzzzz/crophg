@@ -1,0 +1,11 @@
+section: 3.1A
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_3_1a_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - feature_overview.csv
+  - metrics_by_scenario_target.csv
+report_focus:
+  - H-only deployment loss
+  - scenario degradation
+  - trait-specific gap

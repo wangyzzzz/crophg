@@ -1,0 +1,1 @@
+"""Internal manuscript-supporting sections."""

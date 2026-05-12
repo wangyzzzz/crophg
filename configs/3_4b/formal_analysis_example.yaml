@@ -1,0 +1,12 @@
+section: 3.4B
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - metrics_by_fold.csv
+fixed_variants:
+  - H_ANCHOR_AUTO
+  - G+H_ANCHOR_AUTO
+report_focus:
+  - anchor×VI evolution
+  - kept-unit trajectories

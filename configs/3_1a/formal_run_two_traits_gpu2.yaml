@@ -1,0 +1,39 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: data/processed/model_inputs_engineered/gdd_rel_heading
+  scenarios:
+    reference:
+      split_dir: data/processed/splits_4scenarios
+      validation_scenario: reference
+    within_season:
+      split_dir: data/processed/splits_4scenarios
+      validation_scenario: within_season
+    loso:
+      split_dir: data/processed/splits_4scenarios
+      validation_scenario: loso
+    loso_genotype:
+      split_dir: data/processed/splits_4scenarios
+      validation_scenario: loso_genotype
+
+experiment:
+  targets: [ActualYD, PHM]
+  genotype_representation: grm_pca
+  random_seed: 42
+
+optuna:
+  n_trials: 10
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: false
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: false
+
+output:
+  output_dir: outputs/experiments/result3_1A_h_full_two_traits_crophg

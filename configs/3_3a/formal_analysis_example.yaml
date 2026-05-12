@@ -1,0 +1,13 @@
+section: 3.3A
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - metrics_summary.csv
+  - metrics_by_fold.csv
+fixed_variants:
+  - G
+  - H_FULL
+  - G+FULLH
+  - H_ANCHOR_AUTO
+  - G+H_ANCHOR_AUTO

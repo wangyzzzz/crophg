@@ -1,0 +1,71 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: data/processed/model_inputs_engineered/gdd_rel_heading
+  scenarios:
+    reference:
+      split_dir: data/processed/splits_4scenarios
+      validation_scenario: reference
+
+experiment:
+  random_seed: 42
+  n_anchor_bins: 20
+  genotype_representation: grm
+  input_variants: [G, H_FULL, H_ANCHOR_AUTO, G+H_ANCHOR_AUTO, G+FULLH]
+  targets: [ActualYD]
+  predictors_supported: [ridge, elasticnet, lightgbm, random_forest]
+  predictors_run: [ridge]
+  skip_lightgbm_runtime: true
+  model_backends:
+    lightgbm_backend: native
+  anchor_local:
+    n_anchor_bins: 20
+    enable_phase_internal_tail_fill: true
+  anchor_window_search:
+    radius_candidates: [0]
+  anchor_local_pruning:
+    enabled: true
+    group_score_agg: top3_mean
+    min_groups: 4
+    max_groups: 24
+    group_min_score: 0.02
+    group_relative_drop_threshold: 0.20
+    group_plateau_tolerance: 0.01
+    group_plateau_patience: 2
+    group_min_per_phase: 2
+    stability_enabled: true
+    group_min_frequency: 2
+    min_h_features: 0
+    g_aware_score_blend: 1.0
+  fusion:
+    enabled: true
+    g_use_gblup: true
+    selection_metric: pearson
+
+optuna:
+  n_trials: 3
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: true
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: true
+    max_features_by_model:
+      default: 400
+      ridge: 400
+      elasticnet: 400
+      lightgbm: 500
+      random_forest: 500
+
+output:
+  output_dir_base: outputs/experiments/result3_4A_gdd_rel_heading_anchor_auto_reference_smoke
+  append_timestamp: true
+  timestamp_format: "%Y%m%d_%H%M%S"
+  allow_overwrite: false
+  latest_pointer_file: outputs/experiments/result3_4A_gdd_rel_heading_anchor_auto_reference_smoke_latest.txt
+  progress_log: true

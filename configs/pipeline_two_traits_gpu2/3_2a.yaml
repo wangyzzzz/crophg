@@ -1,0 +1,55 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: data/processed/model_inputs_engineered/gdd_rel_heading
+  scenarios:
+    reference:
+      custom_split_strategy: reference
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+    within_season:
+      custom_split_strategy: within_season_known_year_unknown_genotype
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+    loso:
+      custom_split_strategy: loso_known_genotype
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+    loso_genotype:
+      custom_split_strategy: loso_genotype_unknown
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+
+experiment:
+  targets: [ActualYD, PHM]
+  genotype_representation: grm_pca
+  n_anchor_bins: 20
+  random_seed: 42
+  predictors_supported: [ridge, lasso, elasticnet, lightgbm, random_forest]
+  predictors_run: [ridge, lasso, elasticnet, lightgbm, random_forest]
+  modality_variants: [G, GH_SINGLE]
+  factor_group_ablation:
+    enabled: true
+  index_ablation:
+    enabled: false
+
+optuna:
+  n_trials: 10
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+  reuse_best_params_across_outer_folds: true
+  reuse_scope: task_first_outer_fold
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: false
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: true
+    max_features_by_model:
+      default: 2000
+
+output:
+  output_dir_base: outputs/experiments/two_traits_full_pipeline_gpu2/3_2a
+  append_timestamp: false
+  allow_overwrite: true
+  latest_pointer_file: null
+  progress_log: true

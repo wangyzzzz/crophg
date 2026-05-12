@@ -1,0 +1,13 @@
+section: 3.2B
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_3_2b_dir
+anchor_source_dir: /absolute/path/to/existing/result_3_2a_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - metrics_summary.csv
+anchor_source_required_files:
+  - single_anchor_delta.csv
+report_focus:
+  - H-only single-VI change
+  - cross-scenario stability
+  - formal shared-anchor interpretation

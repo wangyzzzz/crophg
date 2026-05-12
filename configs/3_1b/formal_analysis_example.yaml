@@ -1,0 +1,11 @@
+section: 3.1B
+kind: formal-analysis
+input_dir: /absolute/path/to/existing/result_3_1b_dir
+output_dir: /absolute/path/to/output/report_dir
+required_files:
+  - feature_overview.csv
+  - metrics_by_scenario_target.csv
+report_focus:
+  - G compensation
+  - G+FULLH complementarity
+  - scenario-level summary
