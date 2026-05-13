@@ -1,0 +1,34 @@
+version: 4
+name: data_splits_4scenarios_ood_cell
+
+input:
+  path: data/processed/model_inputs_engineered/gdd_rel_heading/plot_index.parquet
+  file_type: parquet
+  sample_id_column: plot_id
+  required_columns:
+    - year
+    - plot_id
+    - genotype_id
+
+splits:
+  random_seed: 42
+  scenarios:
+    reference:
+      custom_split_strategy: reference
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+    within_season:
+      custom_split_strategy: within_season_known_year_unknown_genotype
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+    loso:
+      custom_split_strategy: loso_known_genotype
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+      inner_validation_policy: ood_cell
+    loso_genotype:
+      custom_split_strategy: loso_genotype_unknown
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+      inner_validation_policy: ood_cell
+
+output:
+  split_dir: data/processed/splits_4scenarios_ood_cell
+  summary_report: outputs/reports/data_split_summary_4scenarios_ood_cell.md
+  clean_previous_generated_files: true

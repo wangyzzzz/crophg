@@ -1,0 +1,98 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: data/processed/model_inputs_engineered/gdd_rel_heading
+  scenarios:
+    reference:
+      split_dir: data/processed/splits_4scenarios_ood_cell
+      validation_scenario: reference
+    within_season:
+      split_dir: data/processed/splits_4scenarios_ood_cell
+      validation_scenario: within_season
+    loso:
+      split_dir: data/processed/splits_4scenarios_ood_cell
+      validation_scenario: loso
+    loso_genotype:
+      split_dir: data/processed/splits_4scenarios_ood_cell
+      validation_scenario: loso_genotype
+
+experiment:
+  random_seed: 42
+  n_anchor_bins: 20
+  genotype_representation: grm
+  input_variants: [G, H_FULL, H_ANCHOR_AUTO, G+H_ANCHOR_AUTO, G+FULLH]
+  targets: [ActualYD]
+  predictors_supported: [ridge, elasticnet, lightgbm, random_forest]
+  predictors_run: [ridge]
+  skip_lightgbm_runtime: true
+  model_backends:
+    lightgbm_backend: native
+  phase_state:
+    sow_segments: 4
+    head_segments: 3
+    enable_phase_internal_tail_fill: true
+  anchor_local:
+    n_anchor_bins: 20
+    enable_phase_internal_tail_fill: true
+  anchor_window_search:
+    radius_candidates: [0, 1]
+  growth_prefix:
+    enabled: false
+  anchor_local_pruning:
+    enabled: true
+    group_score_agg: top3_mean
+    min_groups: 0
+    max_groups: 12
+    group_min_score: 0.02
+    group_relative_drop_threshold: 0.20
+    group_plateau_tolerance: 0.01
+    group_plateau_patience: 2
+    group_min_per_phase: 1
+    stability_enabled: true
+    group_min_frequency: 1
+    min_h_features: 0
+    g_aware_score_blend: 1.0
+  fusion:
+    enabled: true
+    g_use_gblup: true
+    selection_metric: pearson
+
+optuna:
+  n_trials: 1
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+  reuse_best_params_across_outer_folds: true
+  reuse_scope: task_first_outer_fold
+  ridge_alpha_grid:
+    enabled: true
+    min_alpha: 0.001
+    max_alpha: 100.0
+    num: 5
+    selection_metric: pearson
+    tie_tolerance: 0.001
+    fusion_tie_tolerance: 0.001
+    std_tie_tolerance: 1.0e-12
+    prefer_larger_alpha_on_tie: true
+    fusion_prefer_larger_alpha_on_tie: true
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: true
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: true
+    max_features_by_model:
+      default: 400
+      ridge: 400
+      elasticnet: 400
+      lightgbm: 500
+      random_forest: 500
+
+output:
+  output_dir_base: outputs/experiments/smoke_pipeline_gpu2/3_3b
+  append_timestamp: false
+  allow_overwrite: true
+  latest_pointer_file: null
+  progress_log: true

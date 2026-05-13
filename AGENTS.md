@@ -50,11 +50,11 @@
 
 - `3.3B` must be generated from its own independent full-season 20 no-bin experiment.
 - `3.3B` should not read `3.4A` prefix outputs as its formal input.
-- Pipeline config for `3.3B`: `configs/pipeline_two_traits_gpu2/3_3b.yaml`.
-- Formal current two-trait `3.3B` experiment output: `outputs/experiments/two_traits_full_pipeline_gpu2/3_3b_midpoint_r0_3_k0_48`.
+- Pipeline config for `3.3B`: `configs/pipeline_two_traits_gpu2/3_3b_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001.yaml`.
+- Formal current two-trait `3.3B` experiment output: `outputs/experiments/two_traits_full_pipeline_gpu2/3_3b_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001`.
 - `3.4A` is the growth-prefix experiment: anchor orders `1..20`, where each prefix cumulatively uses no-bin groups from the first bin through the current bin.
-- Pipeline config for `3.4A`: `configs/pipeline_two_traits_gpu2/3_4a.yaml`.
-- Formal current two-trait `3.4A` experiment output: `outputs/experiments/two_traits_full_pipeline_gpu2/3_4a_midpoint_r0_3_k0_48`.
+- Pipeline config for `3.4A`: `configs/pipeline_two_traits_gpu2/3_4a_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001.yaml`.
+- Formal current two-trait `3.4A` experiment output: `outputs/experiments/two_traits_full_pipeline_gpu2/3_4a_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001`.
 - Current `3.3B/3.4A` H-reduce uses midpoint no-bin anchors:
   - split the full H timeline into 20 continuous bins
   - use each bin's midpoint time key as the target anchor point
@@ -63,6 +63,7 @@
 - `H_FULL` and `G+FULLH` growth-prefix baselines must retain all raw H features inside elapsed H bins.
 - Current `3.3B/3.4A` AUTO radius search uses `anchor_window_search.radius_candidates: [0, 1, 2, 3]`.
 - Current `3.3B/3.4A` group-count search uses `anchor_local_pruning.min_groups: 0` and `anchor_local_pruning.max_groups: 48`.
+- Current `3.3B/3.4A` ridge selection uses a fixed alpha grid `0.001..100` with 21 values, raw inner-val Pearson objective, `tie_tolerance: 0.001`, `fusion_tie_tolerance: 0.001`, and larger-alpha tie preference.
 - In `3.4A` growth-prefix runs, radius-expanded features must also obey the current prefix:
   - both center `anchor_idx` and actual `source_anchor_idx` must be `<= anchor_order - 1`
   - never allow radius context to include future anchors beyond the current prefix
@@ -89,10 +90,80 @@
 - Reused folds must set `optuna_search_performed: false`, `n_optuna_trials: 0`, and leave formal `val_*` / Optuna objective fields empty.
 - Reused folds may record source fields such as `optuna_source_target_year`, `optuna_source_outer_fold`, `optuna_source_trial_number`, and `optuna_source_objective` for auditability.
 
+## Inner-OOF Policy
+
+- Scenario-aware inner-OOF is used only on the first valid outer-fold of each fixed task, aligned with `optuna.reuse_scope: task_first_outer_fold`.
+- Later outer-folds must not rerun H-reduce/window selection; they reuse the first outer-fold's selected H columns, selected K, selected radius, and hyperparameters, then refit/predict their own outer test fold.
+- Runtime metrics must keep audit fields for H-reduce reuse:
+  - `feature_selection_search_performed`
+  - `feature_selection_reused_from_first_outer_fold`
+  - `feature_selection_source_target_year`
+  - `feature_selection_source_outer_fold`
+- Current split builder expands only the first sorted `(target_year, outer_fold)` into multiple inner folds:
+  - `Reference`: target-year genotype folds excluding the outer test fold; no cross-year same-genotype OOF.
+  - `Genotype-Novel`: all years for each validation genotype fold excluding the outer test fold.
+  - `Year-Novel`: non-test-year × genotype-fold cells.
+  - `Joint-Novel`: non-test years for each validation genotype fold excluding the outer test fold.
+
+## OOD-Cell Inner Validation Experiment
+
+- The `ood_cell` split policy is an explicit follow-up experiment for the observed Joint-Novel PHM failure where ordinary inner-OOF still overestimated `G+H_ANCHOR_AUTO`.
+- It must not expose or use outer-test samples for H-reduce, fusion, or model selection.
+- Config for building these splits:
+  - `configs/data_splits_4scenarios_ood_cell.yaml`
+  - output split dir: `data/processed/splits_4scenarios_ood_cell`
+- Config for the two-trait 3.3B test:
+  - `configs/pipeline_two_traits_gpu2/3_3b_midpoint_r0_3_k0_48_ood_cell_cached.yaml`
+- Config for the two-trait 3.4A growth-prefix test:
+  - `configs/pipeline_two_traits_gpu2/3_4a_midpoint_r0_3_k0_48_ood_cell_cached.yaml`
+- Parameter changes relative to ordinary `inner_oof_cached`:
+  - only split generation changes for `Year-Novel` and `Joint-Novel`
+  - `Year-Novel`: first outer-fold inner-val uses one non-test-year × one genotype-fold cell; inner-train excludes the outer-test year and the validation year
+  - `Joint-Novel`: first outer-fold inner-val uses one non-test-year × one genotype-fold cell; inner-train excludes the outer-test year, validation year, outer-test genotype fold, and validation genotype fold
+  - `Reference` and `Genotype-Novel` remain unchanged
+  - 20 midpoint no-bin anchors, `radius_candidates: [0, 1, 2, 3]`, `min_groups: 0`, `max_groups: 48`, and `g_aware_score_blend: 1.0` remain unchanged
+- Treat this as a candidate robustness fix until the new results are inspected; do not overwrite the prior `3_3b_midpoint_r0_3_k0_48_inner_oof_cached` result.
+- Do not overwrite the prior `3_4a_midpoint_r0_3_k0_48` result when testing `ood_cell`; use the explicit `3_4a_midpoint_r0_3_k0_48_ood_cell_cached` output directory.
+
 ## Predictor Set
 
 - Formal executable predictors are `ridge`, `lasso`, `elasticnet`, `lightgbm`, and `random_forest`.
 - Do not reintroduce `svr`; historical file names containing `no_svr` can remain as provenance.
+
+## Smoke Pipeline
+
+- End-to-end CropHG smoke entry: `scripts/run_smoke_pipeline_gpu2.sh`.
+- If `3.2A` smoke outputs already exist and only downstream plumbing needs validation, use:
+  - `scripts/run_smoke_pipeline_resume_after_3_2a_gpu2.sh`
+- Smoke outputs must stay under:
+  - `outputs/experiments/smoke_pipeline_gpu2`
+  - `outputs/reports/smoke_pipeline_gpu2`
+- Smoke is for plumbing validation only:
+  - four deployment scenarios are retained
+  - target is reduced to `ActualYD`
+  - predictor is reduced to `ridge`
+  - `3.2A` uses only the `Reference` scenario and 2 anchor bins
+  - `3.4A` uses anchor orders `[1, 10, 20]`
+  - `3.3B/3.4A` keep raw-`y` scoring and `g_aware_score_blend: 1.0`, but use `radius_candidates: [0, 1]`, `max_groups: 12`, and a 5-point ridge alpha grid for speed
+- Never interpret smoke accuracy as a formal result.
+
+## Six-Trait Full Pipeline
+
+- End-to-end six-trait formal execution entry: `scripts/run_six_traits_full_pipeline_gpu2.sh`.
+- Six-trait formal outputs must stay under:
+  - `outputs/experiments/six_traits_full_pipeline_gpu2`
+  - `outputs/reports/six_traits_full_pipeline_gpu2`
+- Six-trait targets are fixed as:
+  - `ActualYD`, `CM`, `LM`, `PHM`, `Spike`, `TKW`
+- Six-trait `3.3B/3.4A` must keep the same formal `tie001`口径 as the accepted two-trait run:
+  - raw-`y` H-reduce scoring
+  - `g_aware_score_blend: 1.0`
+  - G branch uses GBLUP
+  - ridge alpha grid `0.001..100` with 21 values
+  - `tie_tolerance: 0.001`
+  - `fusion_tie_tolerance: 0.001`
+  - `radius_candidates: [0, 1, 2, 3]`
+  - `min_groups: 0`, `max_groups: 48`
 
 ## Environment
 

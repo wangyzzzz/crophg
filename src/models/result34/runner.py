@@ -1428,6 +1428,105 @@ def _extract_selection_score(metric_dict: dict[str, Any], metric_name: str) -> f
     raise ValueError(f"不支持的 group_selection_metric: {metric_name}")
 
 
+def _resolve_ridge_alpha_grid_cfg(optuna_cfg: dict[str, Any]) -> dict[str, Any] | None:
+    raw = optuna_cfg.get("ridge_alpha_grid", None)
+    if raw in (None, False):
+        return None
+    if raw is True:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise TypeError("optuna.ridge_alpha_grid 必须是字典或布尔值。")
+    if not bool(raw.get("enabled", False)):
+        return None
+
+    values_raw = raw.get("values")
+    if values_raw in (None, "", []):
+        min_alpha = float(raw.get("min_alpha", 1.0e-3))
+        max_alpha = float(raw.get("max_alpha", 1.0e2))
+        num = int(raw.get("num", 21))
+        if min_alpha <= 0 or max_alpha <= 0 or max_alpha <= min_alpha:
+            raise ValueError("optuna.ridge_alpha_grid 的 min_alpha/max_alpha 必须为正且 max_alpha > min_alpha。")
+        if num < 2:
+            raise ValueError("optuna.ridge_alpha_grid.num 至少为 2。")
+        values = np.logspace(np.log10(min_alpha), np.log10(max_alpha), num=num).tolist()
+    else:
+        values = [float(x) for x in values_raw]
+
+    values = sorted({float(x) for x in values if float(x) > 0})
+    if not values:
+        raise ValueError("optuna.ridge_alpha_grid 没有可用 alpha 值。")
+    return {
+        "enabled": True,
+        "values": values,
+        "selection_metric": str(raw.get("selection_metric", "pearson")).strip().lower(),
+        "tie_tolerance": float(raw.get("tie_tolerance", 0.005)),
+        "fusion_tie_tolerance": float(raw.get("fusion_tie_tolerance", raw.get("tie_tolerance", 0.005))),
+        "std_tie_tolerance": float(raw.get("std_tie_tolerance", 1.0e-12)),
+        "prefer_larger_alpha_on_tie": bool(raw.get("prefer_larger_alpha_on_tie", True)),
+        "fusion_prefer_larger_alpha_on_tie": bool(
+            raw.get("fusion_prefer_larger_alpha_on_tie", raw.get("prefer_larger_alpha_on_tie", True))
+        ),
+    }
+
+
+def _trial_attr_float(trial: optuna.trial.FrozenTrial, name: str, default: float) -> float:
+    try:
+        value = float(trial.user_attrs.get(name, default))
+    except Exception:
+        return float(default)
+    return value if np.isfinite(value) else float(default)
+
+
+def _select_best_ridge_grid_trial(
+    complete_trials: list[optuna.trial.FrozenTrial],
+    *,
+    grid_cfg: dict[str, Any],
+    input_variant: str,
+) -> tuple[optuna.trial.FrozenTrial, list[optuna.trial.FrozenTrial]]:
+    metric = str(grid_cfg.get("selection_metric", "pearson")).strip().lower()
+    if metric != "pearson":
+        raise ValueError("当前 ridge_alpha_grid 只支持 selection_metric=pearson。")
+    is_fusion_variant = str(input_variant).strip().upper() in G_H_FUSION_VARIANTS
+    tie_key = "fusion_tie_tolerance" if is_fusion_variant else "tie_tolerance"
+    prefer_key = "fusion_prefer_larger_alpha_on_tie" if is_fusion_variant else "prefer_larger_alpha_on_tie"
+    tie_tolerance = max(0.0, float(grid_cfg.get(tie_key, grid_cfg.get("tie_tolerance", 0.005))))
+    std_tie_tolerance = max(0.0, float(grid_cfg.get("std_tie_tolerance", 1.0e-12)))
+    prefer_larger_alpha = bool(grid_cfg.get(prefer_key, grid_cfg.get("prefer_larger_alpha_on_tie", True)))
+
+    def score(t: optuna.trial.FrozenTrial) -> float:
+        return _trial_attr_float(t, "mean_val_pearson", float("-inf"))
+
+    def std_score(t: optuna.trial.FrozenTrial) -> float:
+        return _trial_attr_float(t, "std_val_pearson", float("inf"))
+
+    def alpha_value(t: optuna.trial.FrozenTrial) -> float:
+        try:
+            return float(t.params.get("alpha", float("nan")))
+        except Exception:
+            return float("nan")
+
+    max_score = max(score(t) for t in complete_trials)
+    near_best = [t for t in complete_trials if max_score - score(t) <= tie_tolerance]
+    min_std = min(std_score(t) for t in near_best)
+    stable = [t for t in near_best if std_score(t) - min_std <= std_tie_tolerance]
+    if prefer_larger_alpha:
+        best = max(stable, key=lambda t: alpha_value(t))
+    else:
+        best = min(stable, key=lambda t: alpha_value(t))
+
+    remaining = [t for t in complete_trials if t.number != best.number]
+    remaining = sorted(
+        remaining,
+        key=lambda t: (
+            -score(t),
+            std_score(t),
+            -alpha_value(t) if prefer_larger_alpha else alpha_value(t),
+            int(t.number),
+        ),
+    )
+    return best, [best, *remaining]
+
+
 def _evaluate_group_count_candidates(
     *,
     x_train: pd.DataFrame,
@@ -1520,6 +1619,8 @@ def _evaluate_group_count_candidates(
     x_train_use = sanitize_feature_matrix(x_train.copy())
     use_safe_fusion = _use_safe_fusion_for_variant(input_variant=variant, fusion_cfg=fusion_cfg)
     use_gblup_for_g = bool(fusion_cfg.get("g_use_gblup", False))
+    if use_safe_fusion and use_gblup_for_g and inner_ctx is not None:
+        inner_ctx.setdefault("_g_branch_cache", {})
 
     for k in candidate_ks:
         keep_groups = _select_anchor_vi_groups_by_count(
@@ -1540,6 +1641,8 @@ def _evaluate_group_count_candidates(
             continue
         if use_safe_fusion and inner_ctx is not None and repo_root is not None:
             inner_for_k = dict(inner_ctx)
+            if use_gblup_for_g:
+                inner_for_k["_g_branch_cache"] = inner_ctx.setdefault("_g_branch_cache", {})
             inner_for_k["x_train"] = x_train.loc[:, keep_cols].copy()
             inner_for_k["x_val"] = x_val.loc[:, keep_cols].copy()
             safe_inner = _fit_predict_safe_fusion(
@@ -1910,6 +2013,12 @@ def _select_best_auto_window_payload(
     tie_tolerance = float(pruning_cfg.get("window_selection_tie_tolerance", 1.0e-6))
     metric_name = str(pruning_cfg.get("group_selection_metric", "pearson"))
     candidate_rows: list[dict[str, Any]] = []
+    shared_g_cache_by_inner: dict[str, dict[str, Any]] = {}
+    if bool((fusion_cfg or {}).get("enabled", False)) and bool((fusion_cfg or {}).get("g_use_gblup", False)):
+        for payload in payloads_by_radius.values():
+            for inner in payload.get("inner_payload", []):
+                cache_key = str(inner.get("split_name", inner.get("inner_fold", "")))
+                inner["_g_branch_cache"] = shared_g_cache_by_inner.setdefault(cache_key, {})
 
     for radius in sorted(payloads_by_radius.keys()):
         payload = payloads_by_radius[int(radius)]
@@ -2024,6 +2133,45 @@ def _select_best_auto_window_payload(
         "window_candidate_scores_json": json.dumps(summary_rows, ensure_ascii=False),
     }
     return dict(best["payload"]), pruning_stats, int(best["radius"])
+
+
+def _apply_cached_feature_selection_to_payload(
+    *,
+    payload: dict[str, Any],
+    cached_stats: dict[str, Any],
+    current_target_year: int,
+    current_outer_fold: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    keep_cols = [str(col) for col in cached_stats.get("kept_columns", [])]
+    if not keep_cols:
+        raise RuntimeError("无法复用 H-reduce 选择：缓存中缺少 kept_columns。")
+
+    available_cols = set(str(col) for col in payload["x_test"].columns)
+    missing_cols = [col for col in keep_cols if col not in available_cols]
+    if missing_cols:
+        raise RuntimeError(
+            "无法复用 H-reduce 选择：当前 outer-fold 缺少缓存列，"
+            f"例如 {missing_cols[:5]}。"
+        )
+
+    new_inner_payload = []
+    for inner in payload["inner_payload"]:
+        new_inner = dict(inner)
+        new_inner["x_train"] = inner["x_train"].loc[:, keep_cols].copy()
+        new_inner["x_val"] = inner["x_val"].loc[:, keep_cols].copy()
+        new_inner_payload.append(new_inner)
+
+    new_payload = dict(payload)
+    new_payload["x_test"] = payload["x_test"].loc[:, keep_cols].copy()
+    new_payload["inner_payload"] = new_inner_payload
+
+    stats = dict(cached_stats)
+    stats["selection_reused_from_first_outer_fold"] = True
+    stats["selection_search_performed"] = False
+    stats["selection_current_target_year"] = int(current_target_year)
+    stats["selection_current_outer_fold"] = int(current_outer_fold)
+    stats["n_total_features_after"] = int(len(keep_cols))
+    return new_payload, stats
 
 
 def _prune_outer_payload_for_anchor_local(
@@ -2808,46 +2956,116 @@ def run_result34(config_path: Path) -> Path:
                             reuse_policy = resolve_optuna_reuse_policy(optuna_cfg)
                             cached_best_params = None
                             cached_source = None
+                            cached_feature_selection: dict[str, Any] | None = None
+                            cached_feature_selection_radius: int | None = None
+                            cached_feature_selection_info: dict[str, Any] | None = None
+                            cached_feature_selection_spec: pd.DataFrame | None = None
 
                             for (target_year, outer_fold), group_splits in ordered_outer_items:
+                                is_feature_reduction_variant = str(input_variant).strip().upper() in REDUCED_H_VARIANTS
+                                feature_selection_search_performed = (
+                                    is_feature_reduction_variant and cached_feature_selection is None
+                                )
                                 if is_auto_variant:
-                                    payloads_by_radius = {
-                                        int(radius): _build_outer_payload(
-                                            auto_candidates[int(radius)]["x"],
+                                    if feature_selection_search_performed:
+                                        payloads_by_radius = {
+                                            int(radius): _build_outer_payload(
+                                                auto_candidates[int(radius)]["x"],
+                                                y_full,
+                                                meta_full,
+                                                group_splits,
+                                            )
+                                            for radius in auto_candidates.keys()
+                                        }
+                                        payload, pruning_stats, selected_radius = _select_best_auto_window_payload(
+                                            payloads_by_radius=payloads_by_radius,
+                                            feature_specs_by_radius=auto_feature_specs,
+                                            input_variant=input_variant,
+                                            pruning_cfg=anchor_local_pruning_cfg,
+                                            predictor=predictor,
+                                            preprocess_cfg=preprocess_cfg,
+                                            model_cfg=exp_cfg.get("model_backends", {}),
+                                            seed=int(seed) + int(target_year % 100) * 10 + int(outer_fold),
+                                            repo_root=Path.cwd(),
+                                            fusion_cfg=fusion_cfg,
+                                        )
+                                        x_info = dict(auto_candidates[int(selected_radius)]["info"])
+                                        feature_spec_df = auto_candidates[int(selected_radius)]["feature_spec"]
+                                        pruning_stats = {
+                                            **pruning_stats,
+                                            "selection_reused_from_first_outer_fold": False,
+                                            "selection_search_performed": True,
+                                            "selection_source_target_year": int(target_year),
+                                            "selection_source_outer_fold": int(outer_fold),
+                                        }
+                                        cached_feature_selection = dict(pruning_stats)
+                                        cached_feature_selection_radius = int(selected_radius)
+                                        cached_feature_selection_info = dict(x_info)
+                                        cached_feature_selection_spec = feature_spec_df.copy()
+                                    else:
+                                        if (
+                                            cached_feature_selection is None
+                                            or cached_feature_selection_radius is None
+                                            or cached_feature_selection_info is None
+                                            or cached_feature_selection_spec is None
+                                        ):
+                                            raise RuntimeError("AUTO H-reduce 复用失败：缺少首个 outer-fold 的选择缓存。")
+                                        selected_radius = int(cached_feature_selection_radius)
+                                        payload_raw = _build_outer_payload(
+                                            auto_candidates[selected_radius]["x"],
                                             y_full,
                                             meta_full,
                                             group_splits,
                                         )
-                                        for radius in auto_candidates.keys()
-                                    }
-                                    payload, pruning_stats, selected_radius = _select_best_auto_window_payload(
-                                        payloads_by_radius=payloads_by_radius,
-                                        feature_specs_by_radius=auto_feature_specs,
-                                        input_variant=input_variant,
-                                        pruning_cfg=anchor_local_pruning_cfg,
-                                        predictor=predictor,
-                                        preprocess_cfg=preprocess_cfg,
-                                        model_cfg=exp_cfg.get("model_backends", {}),
-                                        seed=int(seed) + int(target_year % 100) * 10 + int(outer_fold),
-                                        repo_root=Path.cwd(),
-                                        fusion_cfg=fusion_cfg,
-                                    )
-                                    x_info = dict(auto_candidates[int(selected_radius)]["info"])
-                                    feature_spec_df = auto_candidates[int(selected_radius)]["feature_spec"]
+                                        payload, pruning_stats = _apply_cached_feature_selection_to_payload(
+                                            payload=payload_raw,
+                                            cached_stats=cached_feature_selection,
+                                            current_target_year=int(target_year),
+                                            current_outer_fold=int(outer_fold),
+                                        )
+                                        x_info = dict(cached_feature_selection_info)
+                                        feature_spec_df = cached_feature_selection_spec.copy()
                                 else:
-                                    payload = _build_outer_payload(x_full, y_full, meta_full, group_splits)
-                                    payload, pruning_stats = _stable_anchor_local_pruning(
-                                        payload=payload,
-                                        input_variant=input_variant,
-                                        feature_spec_df=feature_spec_df,
-                                        pruning_cfg=anchor_local_pruning_cfg,
-                                        predictor=predictor,
-                                        preprocess_cfg=preprocess_cfg,
-                                        model_cfg=exp_cfg.get("model_backends", {}),
-                                        seed=int(seed) + int(target_year % 100) * 10 + int(outer_fold),
-                                        repo_root=Path.cwd(),
-                                        fusion_cfg=fusion_cfg,
-                                    )
+                                    payload_raw = _build_outer_payload(x_full, y_full, meta_full, group_splits)
+                                    if feature_selection_search_performed:
+                                        payload, pruning_stats = _stable_anchor_local_pruning(
+                                            payload=payload_raw,
+                                            input_variant=input_variant,
+                                            feature_spec_df=feature_spec_df,
+                                            pruning_cfg=anchor_local_pruning_cfg,
+                                            predictor=predictor,
+                                            preprocess_cfg=preprocess_cfg,
+                                            model_cfg=exp_cfg.get("model_backends", {}),
+                                            seed=int(seed) + int(target_year % 100) * 10 + int(outer_fold),
+                                            repo_root=Path.cwd(),
+                                            fusion_cfg=fusion_cfg,
+                                        )
+                                        pruning_stats = {
+                                            **pruning_stats,
+                                            "selection_reused_from_first_outer_fold": False,
+                                            "selection_search_performed": True,
+                                            "selection_source_target_year": int(target_year),
+                                            "selection_source_outer_fold": int(outer_fold),
+                                        }
+                                        cached_feature_selection = dict(pruning_stats)
+                                        cached_feature_selection_info = dict(x_info)
+                                        cached_feature_selection_spec = feature_spec_df.copy()
+                                    elif is_feature_reduction_variant:
+                                        if cached_feature_selection is None:
+                                            raise RuntimeError("H-reduce 复用失败：缺少首个 outer-fold 的选择缓存。")
+                                        payload, pruning_stats = _apply_cached_feature_selection_to_payload(
+                                            payload=payload_raw,
+                                            cached_stats=cached_feature_selection,
+                                            current_target_year=int(target_year),
+                                            current_outer_fold=int(outer_fold),
+                                        )
+                                        if cached_feature_selection_info is not None:
+                                            x_info = dict(cached_feature_selection_info)
+                                        if cached_feature_selection_spec is not None:
+                                            feature_spec_df = cached_feature_selection_spec.copy()
+                                    else:
+                                        payload = payload_raw
+                                        pruning_stats = {}
                                 inner_payload = payload["inner_payload"]
                                 x_test = payload["x_test"]
                                 y_test = payload["y_test"]
@@ -2861,6 +3079,11 @@ def run_result34(config_path: Path) -> Path:
                                 v_idx = variant_seed_order.index(input_variant)
                                 p_idx = predictor_seed_order.index(predictor)
                                 a_idx = prefix_seed_order.index(anchor_order) if anchor_order in prefix_seed_order else 0
+                                # Full-prefix 3.4A must be directly comparable with unprefixed 3.3B.
+                                # Earlier prefixes keep distinct sampler streams; the final prefix does not.
+                                prefix_seed_offset = 0
+                                if anchor_order is not None and int(anchor_order) < int(prefix_cfg["n_anchor_bins"]):
+                                    prefix_seed_offset = int(a_idx) * 10_000_000
                                 sampler_seed = (
                                     seed
                                     + s_idx * 1_000_000
@@ -2868,7 +3091,7 @@ def run_result34(config_path: Path) -> Path:
                                     + g_idx * 10_000
                                     + v_idx * 1_000
                                     + p_idx * 100
-                                    + a_idx * 10_000_000
+                                    + prefix_seed_offset
                                     + int(target_year % 100) * 10
                                     + int(outer_fold)
                                 )
@@ -2878,8 +3101,16 @@ def run_result34(config_path: Path) -> Path:
                                     fusion_cfg=fusion_cfg,
                                 )
                                 use_gblup_for_g = bool(fusion_cfg.get("g_use_gblup", False))
+                                g_only_gblup = str(input_variant).strip().upper() in G_ONLY_VARIANTS and use_gblup_for_g
+                                ridge_grid_cfg = (
+                                    _resolve_ridge_alpha_grid_cfg(optuna_cfg)
+                                    if predictor == "ridge" and not g_only_gblup
+                                    else None
+                                )
                                 n_trials_effective = (
-                                    1 if str(input_variant).strip().upper() in G_ONLY_VARIANTS and use_gblup_for_g else n_trials
+                                    len(ridge_grid_cfg["values"])
+                                    if ridge_grid_cfg is not None
+                                    else (1 if g_only_gblup else n_trials)
                                 )
 
                                 optuna_search_performed = should_search_on_outer_fold(
@@ -2891,15 +3122,24 @@ def run_result34(config_path: Path) -> Path:
                                     optuna_search_performed = True
 
                                 if optuna_search_performed:
-                                    sampler = optuna.samplers.TPESampler(seed=int(sampler_seed))
-                                    pruner = optuna.pruners.MedianPruner(
-                                        n_startup_trials=pruner_startup_trials,
-                                        n_warmup_steps=1,
-                                    )
+                                    if ridge_grid_cfg is not None:
+                                        sampler = optuna.samplers.GridSampler(
+                                            {"alpha": [float(x) for x in ridge_grid_cfg["values"]]}
+                                        )
+                                        pruner = optuna.pruners.NopPruner()
+                                    else:
+                                        sampler = optuna.samplers.TPESampler(seed=int(sampler_seed))
+                                        pruner = optuna.pruners.MedianPruner(
+                                            n_startup_trials=pruner_startup_trials,
+                                            n_warmup_steps=1,
+                                        )
                                     study = optuna.create_study(direction="minimize", sampler=sampler, pruner=pruner)
 
                                     def objective(trial: optuna.trial.Trial) -> float:
-                                        params = suggest_params(trial, predictor, exp_cfg.get("model_backends", {}))
+                                        if ridge_grid_cfg is not None:
+                                            params = {"alpha": trial.suggest_categorical("alpha", ridge_grid_cfg["values"])}
+                                        else:
+                                            params = suggest_params(trial, predictor, exp_cfg.get("model_backends", {}))
                                         train_losses = []
                                         val_losses = []
                                         train_metrics_list = []
@@ -2974,6 +3214,15 @@ def run_result34(config_path: Path) -> Path:
                                         obj = float(mean_train + mean_val + lambda_gap * gap)
                                         mean_train_metrics = mean_regression_metrics(train_metrics_list)
                                         mean_val_metrics = mean_regression_metrics(val_metrics_list)
+                                        val_pearsons = [
+                                            float(metrics.get("pearson_r", float("nan"))) for metrics in val_metrics_list
+                                        ]
+                                        finite_val_pearsons = [x for x in val_pearsons if np.isfinite(x)]
+                                        std_val_pearson = (
+                                            float(np.std(finite_val_pearsons, ddof=0))
+                                            if finite_val_pearsons
+                                            else float("nan")
+                                        )
                                         trial.set_user_attr("mean_train_loss", mean_train)
                                         trial.set_user_attr("mean_val_loss", mean_val)
                                         trial.set_user_attr("gap", gap)
@@ -2985,6 +3234,15 @@ def run_result34(config_path: Path) -> Path:
                                         trial.set_user_attr("mean_val_rmse", mean_val_metrics["rmse"])
                                         trial.set_user_attr("mean_val_mae", mean_val_metrics["mae"])
                                         trial.set_user_attr("mean_val_pearson", mean_val_metrics["pearson_r"])
+                                        trial.set_user_attr("std_val_pearson", std_val_pearson)
+                                        trial.set_user_attr(
+                                            "selection_objective_mode",
+                                            "max_mean_val_pearson_grid"
+                                            if ridge_grid_cfg is not None
+                                            else "min_train_val_rmse_gap",
+                                        )
+                                        if ridge_grid_cfg is not None:
+                                            return -float(mean_val_metrics["pearson_r"])
                                         return obj
 
                                     study.optimize(objective, n_trials=n_trials_effective, show_progress_bar=False)
@@ -2992,9 +3250,16 @@ def run_result34(config_path: Path) -> Path:
                                     if not complete_trials:
                                         continue
 
-                                    sorted_trials = sorted(complete_trials, key=lambda t: t.value)
+                                    if ridge_grid_cfg is not None:
+                                        best, sorted_trials = _select_best_ridge_grid_trial(
+                                            complete_trials,
+                                            grid_cfg=ridge_grid_cfg,
+                                            input_variant=input_variant,
+                                        )
+                                    else:
+                                        sorted_trials = sorted(complete_trials, key=lambda t: t.value)
+                                        best = study.best_trial
                                     rank_map = {t.number: i + 1 for i, t in enumerate(sorted_trials)}
-                                    best = study.best_trial
                                     cached_best_params = dict(best.params)
                                     cached_source = {
                                         "target_year": int(target_year),
@@ -3031,6 +3296,8 @@ def run_result34(config_path: Path) -> Path:
                                                 "mean_val_rmse": t.user_attrs.get("mean_val_rmse"),
                                                 "mean_val_mae": t.user_attrs.get("mean_val_mae"),
                                                 "mean_val_pearson": t.user_attrs.get("mean_val_pearson"),
+                                                "std_val_pearson": t.user_attrs.get("std_val_pearson"),
+                                                "selection_objective_mode": t.user_attrs.get("selection_objective_mode"),
                                                 "gap": t.user_attrs.get("gap"),
                                                 "objective": t.value,
                                                 "rank": rank_map[t.number],
@@ -3255,6 +3522,7 @@ def run_result34(config_path: Path) -> Path:
                                         "val_g_rmse": float(mean_val_g_metrics["rmse"]) if optuna_search_performed else float("nan"),
                                         "val_g_mae": float(mean_val_g_metrics["mae"]) if optuna_search_performed else float("nan"),
                                         "val_g_pearson": float(mean_val_g_metrics["pearson_r"]) if optuna_search_performed else float("nan"),
+                                        "best_std_val_pearson": float(best_attrs.get("std_val_pearson", np.nan)),
                                         "test_r2": float(test_metrics["r2"]),
                                         "test_rmse": float(test_metrics["rmse"]),
                                         "test_mae": float(test_metrics["mae"]),
@@ -3286,6 +3554,20 @@ def run_result34(config_path: Path) -> Path:
                                         "n_vi_kept": int(pruning_stats.get("n_vi_kept", 0)),
                                         "selected_k_mode": int(pruning_stats.get("selected_k_mode", 0)),
                                         "selected_window_radius": int(pruning_stats.get("selected_window_radius", 0)),
+                                        "feature_selection_search_performed": bool(
+                                            pruning_stats.get("selection_search_performed", False)
+                                        ),
+                                        "feature_selection_reused_from_first_outer_fold": bool(
+                                            pruning_stats.get("selection_reused_from_first_outer_fold", False)
+                                        ),
+                                        "feature_selection_source_target_year": pruning_stats.get(
+                                            "selection_source_target_year",
+                                            np.nan,
+                                        ),
+                                        "feature_selection_source_outer_fold": pruning_stats.get(
+                                            "selection_source_outer_fold",
+                                            np.nan,
+                                        ),
                                         "growth_aware_min_groups": int(
                                             pruning_stats.get(
                                                 "group_min_per_phase_effective_mode",
@@ -3345,6 +3627,9 @@ def run_result34(config_path: Path) -> Path:
                                         "optuna_source_outer_fold": source_outer_fold,
                                         "optuna_source_trial_number": source_trial_number,
                                         "optuna_source_objective": source_objective,
+                                        "optuna_selection_objective_mode": str(
+                                            best_attrs.get("selection_objective_mode", "")
+                                        ),
                                     }
                                 )
                         _append_progress(

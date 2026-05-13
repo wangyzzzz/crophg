@@ -167,26 +167,31 @@ def _build_reference_split_groups(
             test_ids = year_df.loc[year_df["genotype_fold"] == int(outer_fold), "sample_id"].astype(str).tolist()
             if not test_ids:
                 continue
-            val_fold = folds[(folds.index(int(outer_fold)) + 1) % len(folds)]
-            val_ids = year_df.loc[year_df["genotype_fold"] == int(val_fold), "sample_id"].astype(str).tolist()
-            train_mask = ~(
-                ((work["year"] == int(year)) & (work["genotype_fold"] == int(outer_fold)))
-                | ((work["year"] == int(year)) & (work["genotype_fold"] == int(val_fold)))
-            )
-            train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
-            split_name = f"reference_{year}_outer{outer_fold}_inner0"
-            groups[(int(year), int(outer_fold))] = [
-                WithinSeasonSplit(
+            if int(year) == int(years[0]) and int(outer_fold) == int(folds[0]):
+                val_folds = [int(f) for f in folds if int(f) != int(outer_fold)]
+            else:
+                val_folds = [int(folds[(folds.index(int(outer_fold)) + 1) % len(folds)])]
+
+            rows: List[WithinSeasonSplit] = []
+            for inner_fold, val_fold in enumerate(val_folds):
+                val_ids = year_df.loc[year_df["genotype_fold"] == int(val_fold), "sample_id"].astype(str).tolist()
+                train_mask = ~(
+                    ((work["year"] == int(year)) & (work["genotype_fold"] == int(outer_fold)))
+                    | ((work["year"] == int(year)) & (work["genotype_fold"] == int(val_fold)))
+                )
+                train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
+                split_name = f"reference_{year}_outer{outer_fold}_inner{inner_fold}"
+                rows.append(WithinSeasonSplit(
                     split_name=split_name,
                     target_year=int(year),
                     outer_fold=int(outer_fold),
-                    inner_fold=0,
+                    inner_fold=int(inner_fold),
                     train_ids=train_ids,
                     val_ids=val_ids,
                     test_ids=test_ids,
                     random_seed=int(random_seed),
-                )
-            ]
+                ))
+            groups[(int(year), int(outer_fold))] = rows
     return groups
 
 
@@ -207,26 +212,31 @@ def _build_known_year_unknown_genotype_split_groups(
             test_ids = year_df.loc[year_df["genotype_fold"] == int(outer_fold), "sample_id"].astype(str).tolist()
             if not test_ids:
                 continue
-            val_fold = folds[(folds.index(int(outer_fold)) + 1) % len(folds)]
-            val_ids = year_df.loc[year_df["genotype_fold"] == int(val_fold), "sample_id"].astype(str).tolist()
-            train_mask = (
-                (work["genotype_fold"] != int(outer_fold))
-                & ~((work["year"] == int(year)) & (work["genotype_fold"] == int(val_fold)))
-            )
-            train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
-            split_name = f"within_season_known_year_{year}_outer{outer_fold}_inner0"
-            groups[(int(year), int(outer_fold))] = [
-                WithinSeasonSplit(
+            if int(year) == int(years[0]) and int(outer_fold) == int(folds[0]):
+                val_folds = [int(f) for f in folds if int(f) != int(outer_fold)]
+            else:
+                val_folds = [int(folds[(folds.index(int(outer_fold)) + 1) % len(folds)])]
+
+            rows: List[WithinSeasonSplit] = []
+            for inner_fold, val_fold in enumerate(val_folds):
+                val_ids = work.loc[work["genotype_fold"] == int(val_fold), "sample_id"].astype(str).tolist()
+                train_mask = (
+                    (work["genotype_fold"] != int(outer_fold))
+                    & (work["genotype_fold"] != int(val_fold))
+                )
+                train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
+                split_name = f"within_season_known_year_{year}_outer{outer_fold}_inner{inner_fold}"
+                rows.append(WithinSeasonSplit(
                     split_name=split_name,
                     target_year=int(year),
                     outer_fold=int(outer_fold),
-                    inner_fold=0,
+                    inner_fold=int(inner_fold),
                     train_ids=train_ids,
                     val_ids=val_ids,
                     test_ids=test_ids,
                     random_seed=int(random_seed),
-                )
-            ]
+                ))
+            groups[(int(year), int(outer_fold))] = rows
     return groups
 
 
@@ -245,7 +255,6 @@ def _build_unknown_year_known_genotype_split_groups(
         remaining_years = [y for y in years if int(y) != int(year)]
         if len(remaining_years) != 2:
             raise ValueError("当前 loso 自定义划分要求恰有 3 个年份。")
-        val_year = int(remaining_years[0])
         for outer_fold in folds:
             test_ids = work.loc[
                 (work["year"] == int(year)) & (work["genotype_fold"] == int(outer_fold)),
@@ -253,27 +262,33 @@ def _build_unknown_year_known_genotype_split_groups(
             ].astype(str).tolist()
             if not test_ids:
                 continue
-            val_ids = work.loc[
-                (work["year"] == val_year) & (work["genotype_fold"] == int(outer_fold)),
-                "sample_id",
-            ].astype(str).tolist()
-            train_mask = (work["year"] != int(year)) & ~(
-                (work["year"] == val_year) & (work["genotype_fold"] == int(outer_fold))
-            )
-            train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
-            split_name = f"loso_known_genotype_{year}_outer{outer_fold}_inner0"
-            groups[(int(year), int(outer_fold))] = [
-                WithinSeasonSplit(
+            if int(year) == int(years[0]) and int(outer_fold) == int(folds[0]):
+                val_cells = [(int(val_year), int(val_fold)) for val_year in remaining_years for val_fold in folds]
+            else:
+                val_cells = [(int(remaining_years[0]), int(outer_fold))]
+
+            rows: List[WithinSeasonSplit] = []
+            for inner_fold, (val_year, val_fold) in enumerate(val_cells):
+                val_ids = work.loc[
+                    (work["year"] == int(val_year)) & (work["genotype_fold"] == int(val_fold)),
+                    "sample_id",
+                ].astype(str).tolist()
+                train_mask = (work["year"] != int(year)) & ~(
+                    (work["year"] == int(val_year)) & (work["genotype_fold"] == int(val_fold))
+                )
+                train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
+                split_name = f"loso_known_genotype_{year}_outer{outer_fold}_inner{inner_fold}"
+                rows.append(WithinSeasonSplit(
                     split_name=split_name,
                     target_year=int(year),
                     outer_fold=int(outer_fold),
-                    inner_fold=0,
+                    inner_fold=int(inner_fold),
                     train_ids=train_ids,
                     val_ids=val_ids,
                     test_ids=test_ids,
                     random_seed=int(random_seed),
-                )
-            ]
+                ))
+            groups[(int(year), int(outer_fold))] = rows
     return groups
 
 
@@ -292,7 +307,6 @@ def _build_unknown_year_unknown_genotype_split_groups(
         remaining_years = [y for y in years if int(y) != int(year)]
         if len(remaining_years) != 2:
             raise ValueError("当前 loso_genotype 自定义划分要求恰有 3 个年份。")
-        val_year = int(remaining_years[0])
         for outer_fold in folds:
             test_ids = work.loc[
                 (work["year"] == int(year)) & (work["genotype_fold"] == int(outer_fold)),
@@ -300,32 +314,37 @@ def _build_unknown_year_unknown_genotype_split_groups(
             ].astype(str).tolist()
             if not test_ids:
                 continue
-            val_fold = folds[(folds.index(int(outer_fold)) + 1) % len(folds)]
-            if int(val_fold) == int(outer_fold):
-                raise ValueError("val_fold 不能与 outer_fold 相同。")
-            val_ids = work.loc[
-                (work["year"] == val_year) & (work["genotype_fold"] == int(val_fold)),
-                "sample_id",
-            ].astype(str).tolist()
-            train_mask = (
-                (work["year"] != int(year))
-                & (work["genotype_fold"] != int(outer_fold))
-                & ~((work["year"] == val_year) & (work["genotype_fold"] == int(val_fold)))
-            )
-            train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
-            split_name = f"loso_genotype_unknown_{year}_outer{outer_fold}_inner0"
-            groups[(int(year), int(outer_fold))] = [
-                WithinSeasonSplit(
+            if int(year) == int(years[0]) and int(outer_fold) == int(folds[0]):
+                val_folds = [int(f) for f in folds if int(f) != int(outer_fold)]
+            else:
+                val_folds = [int(folds[(folds.index(int(outer_fold)) + 1) % len(folds)])]
+
+            rows: List[WithinSeasonSplit] = []
+            for inner_fold, val_fold in enumerate(val_folds):
+                if int(val_fold) == int(outer_fold):
+                    raise ValueError("val_fold 不能与 outer_fold 相同。")
+                val_ids = work.loc[
+                    (work["year"].isin(remaining_years)) & (work["genotype_fold"] == int(val_fold)),
+                    "sample_id",
+                ].astype(str).tolist()
+                train_mask = (
+                    (work["year"] != int(year))
+                    & (work["genotype_fold"] != int(outer_fold))
+                    & (work["genotype_fold"] != int(val_fold))
+                )
+                train_ids = work.loc[train_mask, "sample_id"].astype(str).tolist()
+                split_name = f"loso_genotype_unknown_{year}_outer{outer_fold}_inner{inner_fold}"
+                rows.append(WithinSeasonSplit(
                     split_name=split_name,
                     target_year=int(year),
                     outer_fold=int(outer_fold),
-                    inner_fold=0,
+                    inner_fold=int(inner_fold),
                     train_ids=train_ids,
                     val_ids=val_ids,
                     test_ids=test_ids,
                     random_seed=int(random_seed),
-                )
-            ]
+                ))
+            groups[(int(year), int(outer_fold))] = rows
     return groups
 
 

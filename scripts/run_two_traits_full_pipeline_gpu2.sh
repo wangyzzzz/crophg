@@ -15,6 +15,16 @@ run_step() {
 mkdir -p outputs/experiments/two_traits_full_pipeline_gpu2
 mkdir -p outputs/reports/two_traits_full_pipeline_gpu2
 
+RESULT33_CONFIG="configs/pipeline_two_traits_gpu2/3_3b_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001.yaml"
+RESULT33_EXP_DIR="outputs/experiments/two_traits_full_pipeline_gpu2/3_3b_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001"
+RESULT33_REPORT_DIR="outputs/reports/two_traits_full_pipeline_gpu2/3_3b_ridge_grid_tie001_analysis"
+RESULT33A_REPORT_DIR="outputs/reports/two_traits_full_pipeline_gpu2/3_3a_ridge_grid_tie001_analysis"
+
+RESULT34_CONFIG="configs/pipeline_two_traits_gpu2/3_4a_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001.yaml"
+RESULT34_EXP_DIR="outputs/experiments/two_traits_full_pipeline_gpu2/3_4a_midpoint_r0_3_k0_48_ood_cell_cached_ridge_grid_tie001"
+RESULT34A_REPORT_DIR="outputs/reports/two_traits_full_pipeline_gpu2/3_4a_ridge_grid_tie001_analysis"
+RESULT34B_REPORT_DIR="outputs/reports/two_traits_full_pipeline_gpu2/3_4b_ridge_grid_tie001_analysis"
+
 run_step "${PYRUN[@]}" -m models.result31.parallel_launcher \
   --config configs/pipeline_two_traits_gpu2/3_1a.yaml \
   --n-workers "$N_WORKERS"
@@ -58,25 +68,25 @@ run_step "${PYRUN[@]}" scripts/result_3_2c_analysis.py \
   --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_2c_analysis
 
 run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
-  --config configs/pipeline_two_traits_gpu2/3_3b.yaml \
+  --config "$RESULT33_CONFIG" \
   --n-workers "$N_WORKERS"
 
 run_step "${PYRUN[@]}" scripts/result_3_3a.py \
-  --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_3b \
-  --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_3a_analysis
+  --input-dir "$RESULT33_EXP_DIR" \
+  --output-dir "$RESULT33A_REPORT_DIR"
 
 run_step "${PYRUN[@]}" scripts/result_3_3b.py \
-  --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_3b \
-  --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_3b_analysis
+  --input-dir "$RESULT33_EXP_DIR" \
+  --output-dir "$RESULT33_REPORT_DIR"
 
 run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
-  --config configs/pipeline_two_traits_gpu2/3_4a.yaml \
+  --config "$RESULT34_CONFIG" \
   --n-workers "$N_WORKERS"
 
 run_step "${PYRUN[@]}" scripts/result_3_4a.py \
-  --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_4a \
-  --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_4a_analysis
+  --input-dir "$RESULT34_EXP_DIR" \
+  --output-dir "$RESULT34A_REPORT_DIR"
 
 run_step "${PYRUN[@]}" scripts/result_3_4b.py \
-  --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_4a \
-  --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_4b_analysis
+  --input-dir "$RESULT34_EXP_DIR" \
+  --output-dir "$RESULT34B_REPORT_DIR"

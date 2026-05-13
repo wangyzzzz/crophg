@@ -120,8 +120,9 @@ def build_result32bc_section_cfg(
 ) -> dict[str, Any]:
     cfg = _normalize_base_cfg(base_cfg)
     exp_cfg = cfg["experiment"]
+    requested_predictors = [str(x).lower() for x in exp_cfg.get("predictors_run", [])]
     exp_cfg["predictors_supported"] = list(DEFAULT_PREDICTORS_5)
-    exp_cfg["predictors_run"] = list(DEFAULT_PREDICTORS_5)
+    exp_cfg["predictors_run"] = requested_predictors or list(DEFAULT_PREDICTORS_5)
     exp_cfg["vi_names"] = [str(x) for x in exp_cfg.get("vi_names", DEFAULT_VI_NAMES)]
     exp_cfg["best_anchor_csv"] = str(best_anchor_csv)
     exp_cfg["n_anchor_bins"] = int(exp_cfg.get("n_anchor_bins", 20))

@@ -42,10 +42,14 @@ def main() -> int:
     repo_root = Path.cwd().resolve()
     config_path = Path(args.config).resolve()
     input_dir = Path(args.input_dir).resolve()
+    base_cfg = read_base_config(config_path)
 
     delta_csv = input_dir / "single_anchor_delta.csv"
     if not delta_csv.exists():
         raise FileNotFoundError(f"缺少 3.2A 产物: {delta_csv}")
+
+    scenario_names = list((base_cfg.get("data", {}).get("scenarios") or {}).keys()) or None
+    predictor_names = [str(x).lower() for x in base_cfg.get("experiment", {}).get("predictors_run", [])] or None
 
     tmp_dir = repo_root / "outputs" / "tmp_shared_anchor"
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -55,9 +59,10 @@ def main() -> int:
         delta_csv=delta_csv,
         output_csv=shared_csv,
         summary_md=shared_md,
+        scenarios=scenario_names,
+        predictors=predictor_names,
     )
 
-    base_cfg = read_base_config(config_path)
     resolved_cfg = build_result32bc_section_cfg(
         base_cfg=base_cfg,
         best_anchor_csv=shared_csv,

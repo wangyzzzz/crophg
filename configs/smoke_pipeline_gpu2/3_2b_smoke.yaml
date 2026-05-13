@@ -1,0 +1,42 @@
+data:
+  timeline_dirs:
+    gdd_rel_heading: data/processed/model_inputs_engineered/gdd_rel_heading
+  scenarios:
+    reference:
+      custom_split_strategy: reference
+      genotype_fold_map_path: outputs/reports/loso_genotype_nested_genotype_fold_map.csv
+
+experiment:
+  targets: [ActualYD]
+  genotype_representation: grm_pca
+  n_anchor_bins: 4
+  random_seed: 42
+  predictors_supported: [ridge, lasso, elasticnet, lightgbm, random_forest]
+  predictors_run: [ridge]
+  vi_names:
+    - vi_ndvi
+    - vi_evi2
+
+optuna:
+  n_trials: 1
+  lambda_gap: 1.0
+  pruner_startup_trials: 1
+
+preprocessing:
+  imputer:
+    strategy: median
+    add_indicator: false
+  variance_threshold:
+    enabled: true
+    threshold: 0.0
+  select_k_best:
+    enabled: true
+    max_features_by_model:
+      default: 200
+
+output:
+  output_dir_base: outputs/experiments/smoke_pipeline_gpu2/3_2b
+  append_timestamp: false
+  allow_overwrite: true
+  latest_pointer_file: null
+  progress_log: true
