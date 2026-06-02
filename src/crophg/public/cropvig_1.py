@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from crophg.public.model_runner import CropVIGModelSpec, dispatch_cropvig_entrypoint
 from crophg.common.report_utils import (
     SCENARIO_ORDER,
     map_scenario_labels,
@@ -19,6 +20,12 @@ SECTION_CODE = "3.3A"
 SECTION_SCOPE = "public"
 SECTION_SLUG = "final_model_definition_and_input_representation"
 VARIANT_ORDER = ["G", "H_FULL", "G+FULLH", "H_ANCHOR_AUTO", "G+H_ANCHOR_AUTO"]
+CROPVIG_SPEC = CropVIGModelSpec(
+    command_name="cropvig_1",
+    model_name="CropVIG-1",
+    input_variant="G+FULLH",
+    description="GBLUP G branch plus full 12VI time-series H.",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -163,12 +170,13 @@ def write_report(
     (out_dir / "cropvig_1_formal_analysis.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def run_analysis(args: argparse.Namespace) -> int:
     if args.print_spec:
         print(f"section={SECTION_CODE}")
         print(f"scope={SECTION_SCOPE}")
         print(f"slug={SECTION_SLUG}")
+        print(f"model={CROPVIG_SPEC.model_name}")
+        print(f"input_variant={CROPVIG_SPEC.input_variant}")
         return 0
 
     input_dir = Path(args.input_dir).resolve()
@@ -204,6 +212,15 @@ def main() -> int:
     )
     print(out_dir)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    return dispatch_cropvig_entrypoint(
+        spec=CROPVIG_SPEC,
+        argv=argv,
+        analysis_parser_factory=build_parser,
+        analysis_runner=run_analysis,
+    )
 
 
 if __name__ == "__main__":

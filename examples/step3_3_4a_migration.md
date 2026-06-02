@@ -3,7 +3,8 @@
 ## Entry
 
 ```bash
-PYTHONPATH=src python3 scripts/cropvig_3.py --input-dir /path/to/result_dir --output-dir /path/to/report_dir
+PYTHONPATH=src python3 scripts/cropvig_3.py run --config /path/to/config.yaml --output-dir /path/to/experiment_dir
+PYTHONPATH=src python3 scripts/cropvig_3.py analyze --input-dir /path/to/experiment_dir --output-dir /path/to/report_dir
 ```
 
 ## Config

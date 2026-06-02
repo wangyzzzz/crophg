@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from crophg.public.model_runner import CropVIGModelSpec, dispatch_cropvig_entrypoint
 from crophg.common.report_utils import (
     SCENARIO_ORDER,
     map_scenario_labels,
@@ -21,6 +22,12 @@ SECTION_SLUG = "growth_prefix_performance_curve"
 VARIANT_ORDER = ["G", "H_FULL", "G+FULLH", "H_ANCHOR_AUTO", "G+H_ANCHOR_AUTO"]
 ANCHOR_ORDER_COLS = ["scenario", "target", "input_variant", "anchor_order", "anchor_tb", "anchor_phase"]
 PROPOSED_VARIANTS = ["G+FULLH", "H_ANCHOR_AUTO", "G+H_ANCHOR_AUTO"]
+CROPVIG_SPEC = CropVIGModelSpec(
+    command_name="cropvig_3",
+    model_name="CropVIG-3",
+    input_variant="G+H_ANCHOR_AUTO",
+    description="GBLUP G branch plus GH-aware adaptive phenology-VI selection.",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -291,12 +298,13 @@ def write_report(
     (out_dir / "cropvig_3_formal_analysis.md").write_text("\n".join(lines), encoding="utf-8")
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def run_analysis(args: argparse.Namespace) -> int:
     if args.print_spec:
         print(f"section={SECTION_CODE}")
         print(f"scope={SECTION_SCOPE}")
         print(f"slug={SECTION_SLUG}")
+        print(f"model={CROPVIG_SPEC.model_name}")
+        print(f"input_variant={CROPVIG_SPEC.input_variant}")
         return 0
 
     input_dir = Path(args.input_dir).resolve()
@@ -342,6 +350,15 @@ def main() -> int:
     )
     print(out_dir)
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    return dispatch_cropvig_entrypoint(
+        spec=CROPVIG_SPEC,
+        argv=argv,
+        analysis_parser_factory=build_parser,
+        analysis_runner=run_analysis,
+    )
 
 
 if __name__ == "__main__":
