@@ -3,7 +3,7 @@
 ## Entry
 
 ```bash
-PYTHONPATH=src python scripts/result_3_3b.py --input-dir /path/to/result_dir --output-dir /path/to/report_dir
+PYTHONPATH=src python scripts/cropvig_2.py --input-dir /path/to/result_dir --output-dir /path/to/report_dir
 ```
 
 ## Config
@@ -21,7 +21,7 @@ Current implementation reads the result directory directly and expects:
 
 A successful run should create:
 
-- `result_3_3b_formal_analysis.md`
+- `cropvig_2_formal_analysis.md`
 - `trait_level_compare.csv`
 - `trait_overall_summary.csv`
 - `scenario_summary.csv`
@@ -35,5 +35,5 @@ A successful run should create:
 Recommended test command:
 
 ```bash
-PYTHONPATH=src python -m pytest tests/test_result_3_3b.py tests/test_framework.py -q
+PYTHONPATH=src python -m pytest tests/test_cropvig_2.py tests/test_framework.py -q
 ```

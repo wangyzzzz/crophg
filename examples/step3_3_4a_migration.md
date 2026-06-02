@@ -3,7 +3,7 @@
 ## Entry
 
 ```bash
-PYTHONPATH=src python3 scripts/result_3_4a.py --input-dir /path/to/result_dir --output-dir /path/to/report_dir
+PYTHONPATH=src python3 scripts/cropvig_3.py --input-dir /path/to/result_dir --output-dir /path/to/report_dir
 ```
 
 ## Config
@@ -24,7 +24,7 @@ Paper-facing question:
 
 A successful run should create:
 
-- `result_3_4a_formal_analysis.md`
+- `cropvig_3_formal_analysis.md`
 - `prefix_curve_summary.csv`
 - `trait_level_compare.csv`
 - `scenario_summary.csv`
@@ -37,5 +37,5 @@ A successful run should create:
 Recommended test command:
 
 ```bash
-PYTHONPATH=src python -m pytest tests/test_result_3_4a.py tests/test_framework.py -q
+PYTHONPATH=src python -m pytest tests/test_cropvig_3.py tests/test_framework.py -q
 ```

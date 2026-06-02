@@ -1,4 +1,4 @@
-from crophg.public.result_3_3a import main
+from crophg.public.cropvig_2 import main
 
 
 if __name__ == "__main__":

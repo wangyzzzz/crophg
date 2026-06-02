@@ -1,0 +1,6 @@
+scenario,target,input_variant,selected_window_radius,n_features_total,n_features_h_full,n_features_g,n_features_after_pruning,n_h_features_after_pruning,selected_k_mode,n_group_kept
+reference,ActualYD,G,,,0,412,,,"",
+reference,ActualYD,H_FULL,,120,120,0,,,"",
+reference,ActualYD,G+FULLH,,532,120,412,,,"",
+reference,ActualYD,H_ANCHOR_AUTO,0,,,0,48,40,4,6
+reference,ActualYD,G+H_ANCHOR_AUTO,1,,,412,60,48,5,7

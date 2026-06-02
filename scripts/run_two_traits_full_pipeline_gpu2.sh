@@ -71,11 +71,11 @@ run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
   --config "$RESULT33_CONFIG" \
   --n-workers "$N_WORKERS"
 
-run_step "${PYRUN[@]}" scripts/result_3_3a.py \
+run_step "${PYRUN[@]}" scripts/cropvig_1.py \
   --input-dir "$RESULT33_EXP_DIR" \
   --output-dir "$RESULT33A_REPORT_DIR"
 
-run_step "${PYRUN[@]}" scripts/result_3_3b.py \
+run_step "${PYRUN[@]}" scripts/cropvig_2.py \
   --input-dir "$RESULT33_EXP_DIR" \
   --output-dir "$RESULT33_REPORT_DIR"
 
@@ -83,7 +83,7 @@ run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
   --config "$RESULT34_CONFIG" \
   --n-workers "$N_WORKERS"
 
-run_step "${PYRUN[@]}" scripts/result_3_4a.py \
+run_step "${PYRUN[@]}" scripts/cropvig_3.py \
   --input-dir "$RESULT34_EXP_DIR" \
   --output-dir "$RESULT34A_REPORT_DIR"
 

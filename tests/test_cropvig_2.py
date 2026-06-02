@@ -1,6 +1,6 @@
 import pandas as pd
 
-from crophg.public.result_3_3b import (
+from crophg.public.cropvig_2 import (
     build_compression_summary,
     build_feature_summary,
     build_gain_summary,

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from crophg.public.result_3_3a import (
+from crophg.public.cropvig_1 import (
     build_auto_window_selection_counts,
     build_overall_summary,
     build_scenario_summary,

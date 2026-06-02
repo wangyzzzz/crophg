@@ -15,6 +15,9 @@ dependencies = []
 
 [project.scripts]
 crophg = "crophg.cli:main"
+cropvig-1 = "crophg.public.cropvig_1:main"
+cropvig-2 = "crophg.public.cropvig_2:main"
+cropvig-3 = "crophg.public.cropvig_3:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

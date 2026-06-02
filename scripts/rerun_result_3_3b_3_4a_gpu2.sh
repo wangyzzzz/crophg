@@ -65,11 +65,11 @@ run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
   --config configs/pipeline_two_traits_gpu2/3_3b.yaml \
   --n-workers "$N_WORKERS"
 
-run_step "${PYRUN[@]}" scripts/result_3_3a.py \
+run_step "${PYRUN[@]}" scripts/cropvig_1.py \
   --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_3b \
   --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_3a_analysis
 
-run_step "${PYRUN[@]}" scripts/result_3_3b.py \
+run_step "${PYRUN[@]}" scripts/cropvig_2.py \
   --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_3b \
   --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_3b_analysis
 
@@ -77,7 +77,7 @@ run_step "${PYRUN[@]}" scripts/run_result3_4_parallel_launcher.py \
   --config configs/pipeline_two_traits_gpu2/3_4a.yaml \
   --n-workers "$N_WORKERS"
 
-run_step "${PYRUN[@]}" scripts/result_3_4a.py \
+run_step "${PYRUN[@]}" scripts/cropvig_3.py \
   --input-dir outputs/experiments/two_traits_full_pipeline_gpu2/3_4a \
   --output-dir outputs/reports/two_traits_full_pipeline_gpu2/3_4a_analysis
 

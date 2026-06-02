@@ -3,7 +3,7 @@ import tempfile
 
 import pandas as pd
 
-from crophg.public.result_3_4a import (
+from crophg.public.cropvig_3 import (
     build_anchor_delta_summary,
     build_early_advantage_summary,
     build_overall_summary,

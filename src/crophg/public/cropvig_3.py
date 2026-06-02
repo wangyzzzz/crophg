@@ -24,7 +24,7 @@ PROPOSED_VARIANTS = ["G+FULLH", "H_ANCHOR_AUTO", "G+H_ANCHOR_AUTO"]
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="crophg 3.4A formal analysis entry")
+    parser = argparse.ArgumentParser(description="cropvig_3 formal analysis entry")
     parser.add_argument("--input-dir", type=str, required=True, help="Existing result directory with metrics_summary.csv and metrics_by_fold.csv")
     parser.add_argument("--output-dir", type=str, default="", help="Optional output report directory")
     parser.add_argument("--print-spec", action="store_true", help="Print section scaffold metadata and exit")
@@ -251,7 +251,7 @@ def write_report(
     best_score = float(best_row["overall_mean_pearson"])
 
     lines: list[str] = []
-    lines.append("# Result 3.4A Formal Analysis")
+    lines.append("# CropVIG-3 Formal Analysis")
     lines.append("")
     lines.append("## Scope")
     lines.append(f"- input_dir: `{input_dir.as_posix()}`")
@@ -288,7 +288,7 @@ def write_report(
     lines.append("")
     lines.append("## Saturation Summary")
     lines.append(_to_text_table(saturation_summary))
-    (out_dir / "result_3_4a_formal_analysis.md").write_text("\n".join(lines), encoding="utf-8")
+    (out_dir / "cropvig_3_formal_analysis.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> int:
@@ -304,7 +304,7 @@ def main() -> int:
         out_dir = Path(args.output_dir).resolve()
     else:
         stamp = datetime.now().strftime("%Y%m%d")
-        out_dir = Path.cwd() / "outputs" / "reports" / f"result_3_4a_formal_analysis_{stamp}"
+        out_dir = Path.cwd() / "outputs" / "reports" / f"cropvig_3_formal_analysis_{stamp}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     metrics_summary = _ensure_variants(read_required_csv(input_dir, "metrics_summary.csv"))

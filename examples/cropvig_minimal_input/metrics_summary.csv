@@ -1,0 +1,11 @@
+scenario,target,input_variant,mean_pearson,anchor_order,anchor_tb,anchor_phase
+reference,ActualYD,G,0.610,1,10,phase_1
+reference,ActualYD,H_FULL,0.420,1,10,phase_1
+reference,ActualYD,G+FULLH,0.560,1,10,phase_1
+reference,ActualYD,H_ANCHOR_AUTO,0.480,1,10,phase_1
+reference,ActualYD,G+H_ANCHOR_AUTO,0.590,1,10,phase_1
+reference,ActualYD,G,0.630,2,20,phase_2
+reference,ActualYD,H_FULL,0.440,2,20,phase_2
+reference,ActualYD,G+FULLH,0.580,2,20,phase_2
+reference,ActualYD,H_ANCHOR_AUTO,0.500,2,20,phase_2
+reference,ActualYD,G+H_ANCHOR_AUTO,0.610,2,20,phase_2
